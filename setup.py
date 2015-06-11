@@ -9,6 +9,8 @@ import json
 
 from glob import glob
 
+FORCE_DIST = None
+
 BASE_SDK_URL = "http://commondatastorage.googleapis.com/dart-archive/channels/dev/raw/latest/sdk/"
 CUSTOM_SDK_URL = "https://raw.githubusercontent.com/IOT-DSA/dart-sdk-builds/master/"
 DIST_BASE_URL = "https://raw.githubusercontent.com/IOT-DSA/dists/master/"
@@ -116,6 +118,9 @@ if arch == "i386" or arch == "i686":
 if arch == "x86_64":
     arch = "x64"
 
+if arch == "amd64":
+    arch = "x64"
+
 if arch != "armv5tel" and arch.__contains__("arm"):
     arch = "arm"
 
@@ -178,8 +183,11 @@ def select_distribution():
 
     return do_select()
 
+dist_id = FORCE_DIST
 
-dist_id = select_distribution()
+if FORCE_DIST is not None:
+    dist_id = select_distribution()
+
 dist = dists[dist_id]
 base_url = dist_info.get("baseUrl", DIST_BASE_URL)
 fetch(base_url + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
