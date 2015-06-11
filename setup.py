@@ -1,13 +1,17 @@
+from sys import stdin, stdout
 import urllib2
 import os
 import zipfile
 import fnmatch
 import platform
 import shutil
+import json
+
 from glob import glob
 
 BASE_SDK_URL = "http://commondatastorage.googleapis.com/dart-archive/channels/dev/raw/latest/sdk/"
 CUSTOM_SDK_URL = "https://raw.githubusercontent.com/IOT-DSA/dart-sdk-builds/master/"
+DIST_BASE_URL = "https://raw.githubusercontent.com/IOT-DSA/dists/master/"
 
 sdk_urls = {
     "linux-ia32": BASE_SDK_URL + "dartsdk-linux-ia32-release.zip",
@@ -38,9 +42,15 @@ def fetch(url, file_name):
         file_size_dl += len(buff)
         f.write(buff)
         status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
-        status = status + chr(8) * (len(status) + 1)
+        status += chr(8) * (len(status) + 1)
         print status
     f.close()
+
+
+def read_json_url(url):
+    u = urllib2.urlopen(url)
+    content = u.read()
+    return json.loads(content)
 
 
 def extract_zip_file(name, target, check_single_dir=True):
@@ -125,3 +135,44 @@ for path in glob(os.path.join("dart-sdk", "bin", "*")):
         os.chmod(path, 777)
     except OSError:
         pass
+
+dists = read_json_url(DIST_BASE_URL + "dists.json")
+
+mid = 1
+
+mapping = {}
+
+for key in dists.keys():
+    mapping[mid] = key
+    mid += 1
+
+
+def select_distribution():
+    idx = 1
+
+    print("Choose your distribution:")
+    for nkey in dists.keys():
+        display_name = dists[nkey]["displayName"]
+        print("- [" + str(idx) + "] " + display_name)
+        idx += 1
+
+    def do_select():
+        stdout.write("Distribution: ")
+        result = stdin.readline()
+        try:
+            mr = int(result)
+
+            if mr < 1 or mr > mid - 1:
+                print("Invalid Distribution.")
+                return do_select()
+
+            return mapping[mr]
+        except SyntaxError:
+            print("Invalid Distribution.")
+            return do_select()
+    return do_select()
+
+dist_id = select_distribution()
+dist = dists[dist_id]
+fetch(DIST_BASE_URL + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
+extract_zip_file("dist.zip", "dist")
