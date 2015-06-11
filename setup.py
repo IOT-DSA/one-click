@@ -66,6 +66,9 @@ def read_json_url(url):
 
 
 def extract_zip_file(name, target, check_single_dir=True):
+    remove_if_exists(target)
+    os.makedirs(target)
+
     zfile = zipfile.ZipFile(name)
 
     zfile.extractall(target)
