@@ -47,6 +47,16 @@ def fetch(url, file_name):
     f.close()
 
 
+def remove_if_exists(npath):
+    if os.path.isdir(npath):
+        shutil.rmtree(npath, ignore_errors=True)
+    else:
+        try:
+            os.remove(npath)
+        except OSError:
+            pass
+
+
 def read_json_url(url):
     u = urllib2.urlopen(url)
     content = u.read()
@@ -67,6 +77,7 @@ def extract_zip_file(name, target, check_single_dir=True):
         for oldfile in all_files:
             newfile = oldfile.replace(main_dir, parent_dir)
             os.renames(oldfile, newfile)
+        remove_if_exists(main_dir)
 
 
 def recursive_glob(treeroot, pattern):
@@ -79,21 +90,11 @@ def recursive_glob(treeroot, pattern):
 
 def is_internet_on():
     try:
-        urllib2.urlopen("https://www.google.com/", timeout=1)
+        urllib2.urlopen(DIST_BASE_URL + "dists.json", timeout=1)
         return True
     except urllib2.URLError:
         pass
     return False
-
-
-def remove_if_exists(path):
-    if os.path.isdir(path):
-        shutil.rmtree(path, ignore_errors=True)
-    else:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
 
 
 def fail(msg):
@@ -103,6 +104,9 @@ def fail(msg):
 
 if not is_internet_on():
     fail("You must be connected to the internet to use this tool.")
+
+if os.path.exists("dist"):
+    fail("You already have a distribution installed.")
 
 arch = platform.machine().lower()
 
@@ -136,7 +140,8 @@ for path in glob(os.path.join("dart-sdk", "bin", "*")):
     except OSError:
         pass
 
-dists = read_json_url(DIST_BASE_URL + "dists.json")
+dist_info = read_json_url(DIST_BASE_URL + "dists.json")
+dists = dist_info["dists"]
 
 mid = 1
 
@@ -170,9 +175,13 @@ def select_distribution():
         except SyntaxError:
             print("Invalid Distribution.")
             return do_select()
+
     return do_select()
+
 
 dist_id = select_distribution()
 dist = dists[dist_id]
-fetch(DIST_BASE_URL + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
+base_url = dist_info.get("baseUrl", DIST_BASE_URL)
+fetch(base_url + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
 extract_zip_file("dist.zip", "dist")
+remove_if_exists("dist.zip")
