@@ -185,7 +185,7 @@ def select_distribution():
 
 dist_id = FORCE_DIST
 
-if FORCE_DIST is not None:
+if FORCE_DIST is None:
     dist_id = select_distribution()
 
 dist = dists[dist_id]
