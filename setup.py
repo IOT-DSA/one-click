@@ -6,12 +6,13 @@ import fnmatch
 import platform
 import shutil
 import json
+import stat
 
 from glob import glob
 
-FORCE_DIST = None
+OFFLINE = False
 
-BASE_SDK_URL = "http://commondatastorage.googleapis.com/dart-archive/channels/dev/raw/latest/sdk/"
+BASE_SDK_URL = "https://commondatastorage.googleapis.com/dart-archive/channels/dev/raw/latest/sdk/"
 CUSTOM_SDK_URL = "https://raw.githubusercontent.com/IOT-DSA/dart-sdk-builds/master/"
 DIST_BASE_URL = "https://raw.githubusercontent.com/IOT-DSA/dists/master/"
 
@@ -32,7 +33,7 @@ def fetch(url, file_name):
     f = open(file_name, 'wb')
     meta = u.info()
     file_size = int(meta.getheaders("Content-Length")[0])
-    print "Downloading: %s Bytes: %s" % (file_name, file_size)
+    print("Fetch %s (%s bytes)" % (file_name, file_size))
 
     file_size_dl = 0
     block_sz = 8192
@@ -43,10 +44,12 @@ def fetch(url, file_name):
 
         file_size_dl += len(buff)
         f.write(buff)
-        status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
+        status = r"%10d of %d bytes [%3.2f%%]" % (file_size_dl, file_size, file_size_dl * 100. / file_size)
         status += chr(8) * (len(status) + 1)
-        print status
+        stdout.write(status + "\r")
+        stdout.flush()
     f.close()
+    print("")
 
 
 def remove_if_exists(npath):
@@ -66,6 +69,7 @@ def read_json_url(url):
 
 
 def extract_zip_file(name, target, check_single_dir=True):
+    print("Extract " + name)
     remove_if_exists(target)
     os.makedirs(target)
 
@@ -110,64 +114,70 @@ def fail(msg):
 if not is_internet_on():
     fail("You must be connected to the internet to use this tool.")
 
-if os.path.exists("dist"):
-    fail("You already have a distribution installed.")
+if not OFFLINE:
+    if os.path.exists("dist"):
+        fail("You already have a distribution installed.")
 
-arch = platform.machine().lower()
+    arch = platform.machine().lower()
 
-if arch == "i386" or arch == "i686":
-    arch = "ia32"
+    if arch == "i386" or arch == "i686":
+        arch = "ia32"
 
-if arch == "x86_64":
-    arch = "x64"
+    if arch == "x86_64":
+        arch = "x64"
 
-if arch == "amd64":
-    arch = "x64"
+    if arch == "amd64":
+        arch = "x64"
 
-if arch != "armv5tel" and arch.__contains__("arm"):
-    arch = "arm"
+    if arch != "armv5tel" and arch.__contains__("arm"):
+        arch = "arm"
 
-system_name = platform.system().lower()
+    system_name = platform.system().lower()
 
-system_id = system_name + "-" + arch
+    system_id = system_name + "-" + arch
 
-if not sdk_urls.__contains__(system_id):
-    fail("Unsupported System Type: " + system_id)
+    if not sdk_urls.__contains__(system_id):
+        fail("Unsupported System Type: " + system_id)
 
-remove_if_exists("dart-sdk")
-remove_if_exists("dart-sdk.zip")
-fetch(sdk_urls[system_id], "dart-sdk.zip")
+    remove_if_exists("dart-sdk")
+    remove_if_exists("dart-sdk.zip")
+    fetch(sdk_urls[system_id], "dart-sdk.zip")
+
 extract_zip_file("dart-sdk.zip", "dart-sdk")
 remove_if_exists("dart-sdk.zip")
+
 for path in glob(os.path.join("dart-sdk", "bin", "*")):
     if os.path.isdir(path):
         continue
 
     try:
-        os.chmod(path, 777)
+        mode = os.stat(path).st_mode
+        mode |= (mode & 292) >> 2
+        os.chmod(path, mode)
     except OSError:
         pass
 
-dist_info = read_json_url(DIST_BASE_URL + "dists.json")
-dists = dist_info["dists"]
 
-mid = 1
+if not OFFLINE:
+    dist_info = read_json_url(DIST_BASE_URL + "dists.json")
+    dists = dist_info["dists"]
 
-mapping = {}
+    mid = 1
 
-for key in dists.keys():
-    mapping[mid] = key
-    mid += 1
-
-
-def select_distribution():
+    mapping = {}
     idx = 1
 
+    for key in dists.keys():
+        mapping[mid] = key
+        mid += 1
+
     print("Choose your distribution:")
+
     for nkey in dists.keys():
         display_name = dists[nkey]["displayName"]
         print("- [" + str(idx) + "] " + display_name)
         idx += 1
+
 
     def do_select():
         stdout.write("Distribution: ")
@@ -184,15 +194,15 @@ def select_distribution():
             print("Invalid Distribution.")
             return do_select()
 
-    return do_select()
+    dist_id = do_select()
+    dist = dists[dist_id]
+    base_url = dist_info.get("baseUrl", DIST_BASE_URL)
+    fetch(base_url + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
+else:
+    if not os.path.exists("dart-sdk.zip"):
+        fail("Dart SDK is missing in the offline package.")
+    if not os.path.exists("dist.zip"):
+        fail("Distribution is missing in the offline package.")
 
-dist_id = FORCE_DIST
-
-if FORCE_DIST is None:
-    dist_id = select_distribution()
-
-dist = dists[dist_id]
-base_url = dist_info.get("baseUrl", DIST_BASE_URL)
-fetch(base_url + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
 extract_zip_file("dist.zip", "dist")
 remove_if_exists("dist.zip")
