@@ -5,5 +5,5 @@ build/
 *.iml
 *.ipr
 *.iws
-dist/
-dist.zip
+dglux-server/
+dglux-server.zip

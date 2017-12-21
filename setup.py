@@ -12,23 +12,24 @@ from glob import glob
 
 OFFLINE = False
 
-BASE_SDK_URL = "https://commondatastorage.googleapis.com/dart-archive/channels/dev/raw/latest/sdk/"
-CUSTOM_SDK_URL = "https://raw.githubusercontent.com/IOT-DSA/dart-sdk-builds/master/"
-DIST_BASE_URL = "https://raw.githubusercontent.com/IOT-DSA/dists/master/"
+DART_SDK_BASE_URL = "https://commondatastorage.googleapis.com/dart-archive/channels/dev/raw/latest/sdk/"
+DART_SDK_CUSTOM_URL = "https://raw.githubusercontent.com/IOT-DSA/dart-sdk-builds/master/"
+DART_SDK_VERSION = "1.17.1";
+DART_SDK_CHANNEL = "stable";
 
-sdk_urls = {
-    "linux-ia32": BASE_SDK_URL + "dartsdk-linux-ia32-release.zip",
-    "linux-x64": BASE_SDK_URL + "dartsdk-linux-x64-release.zip",
-    "linux-armv5tel": CUSTOM_SDK_URL + "dgbox.zip",
-    "linux-arm": CUSTOM_SDK_URL + "arm.zip",
-    "darwin-ia32": BASE_SDK_URL + "dartsdk-macos-ia32-release.zip",
-    "darwin-x64": BASE_SDK_URL + "dartsdk-macos-x64-release.zip",
-    "windows-ia32": BASE_SDK_URL + "dartsdk-windows-ia32-release.zip",
-    "windows-x64": BASE_SDK_URL + "dartsdk-windows-x64-release.zip"
-}
+LINK_BASE_URL = "https://dsa.s3.amazonaws.com/links/";
+DIST_BASE_URL = "https://dsa.s3.amazonaws.com/dists/";
+
+
+def get_dart_dl_url(platform):
+    if not (platform.startswith("linux-") or platform.startswith("windows-") or
+            platform.startswith("macos-")):
+        return "https://iot-dsa.github.io/dart-sdk-builds/{0}".format(platform)
+    return "https://commondatastorage.googleapis.com/dart-archive/channels/{0}/raw/{1}/sdk/dartsdk-{2}-release.zip".format(DART_SDK_CHANNEL, DART_SDK_VERSION, platform)
 
 
 def fetch(url, file_name):
+    print("Fetching %s" % (url))
     u = urllib2.urlopen(url)
     f = open(file_name, 'wb')
     meta = u.info()
@@ -115,7 +116,7 @@ if not is_internet_on():
     fail("You must be connected to the internet to use this tool.")
 
 if not OFFLINE:
-    if os.path.exists("dist"):
+    if os.path.exists("dglux-server"):
         fail("You already have a distribution installed.")
 
     arch = platform.machine().lower()
@@ -136,12 +137,15 @@ if not OFFLINE:
 
     system_id = system_name + "-" + arch
 
-    if not sdk_urls.__contains__(system_id):
-        fail("Unsupported System Type: " + system_id)
+    system_id = system_id.replace("darwin-", "macos-")
+
+    # TODO: Reimplement platform failsafe
+    #if not sdk_urls.__contains__(system_id):
+        #fail("Unsupported System Type: " + system_id)
 
     remove_if_exists("dart-sdk")
     remove_if_exists("dart-sdk.zip")
-    fetch(sdk_urls[system_id], "dart-sdk.zip")
+    fetch(get_dart_dl_url(system_id), "dart-sdk.zip")
 
 extract_zip_file("dart-sdk.zip", "dart-sdk")
 remove_if_exists("dart-sdk.zip")
@@ -197,12 +201,12 @@ if not OFFLINE:
     dist_id = do_select()
     dist = dists[dist_id]
     base_url = dist_info.get("baseUrl", DIST_BASE_URL)
-    fetch(base_url + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dist.zip")
+    fetch(base_url + dist_id + "/" + dist["latest"] + "/" + dist["file"], "dglux-server.zip")
 else:
     if not os.path.exists("dart-sdk.zip"):
         fail("Dart SDK is missing in the offline package.")
-    if not os.path.exists("dist.zip"):
+    if not os.path.exists("dglux-server.zip"):
         fail("Distribution is missing in the offline package.")
 
-extract_zip_file("dist.zip", "dist")
-remove_if_exists("dist.zip")
+extract_zip_file("dglux-server.zip", "dglux-server")
+remove_if_exists("dglux-server.zip")
